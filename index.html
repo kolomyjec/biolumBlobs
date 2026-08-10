@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bioluminescent Blobs</title>
+    <style>
+        /* --- Base Styles --- */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        /* --- Typography & Overlay --- */
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            pointer-events: none;
+            text-shadow: 0px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+        
+        h1 { 
+            margin: 0 0 5px 0; 
+            font-size: 1.2rem; 
+            letter-spacing: 2px; 
+            text-transform: uppercase; 
+        }
+        
+        p { 
+            margin: 0; 
+            font-size: 0.9rem; 
+            opacity: 0.7; 
+        }
+        
+        .perf { 
+            color: #00ffaa; 
+            font-weight: bold; 
+            margin-top: 5px; 
+            font-size: 0.8rem;
+        }
+
+        /* --- Info Modal Styles --- */
+        #info-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 12, 20, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            color: #fff;
+            z-index: 1000;
+            width: 320px;
+            backdrop-filter: blur(5px);
+            text-align: center;
+        }
+
+        #info-modal h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #info-modal p {
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        #info-modal .copyright {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 15px;
+            margin-bottom: 20px;
+        }
+
+        /* --- Print Modal Styles --- */
+        #print-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 12, 20, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            color: #fff;
+            z-index: 1000;
+            width: 300px;
+            backdrop-filter: blur(5px);
+        }
+
+        #print-modal h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+            border-radius: 4px;
+        }
+        button:hover { background: #555; }
+        
+        button#btn-print {
+            background: #2a9d8f;
+            border-color: #2a9d8f;
+        }
+        button#btn-print:hover { background: #21867a; }
+    </style>
+    
+    <!--
+        Three.js r128 loaded locally (classic global build, sets window.THREE).
+        Must come before the importmap/module script below so vendor/three-shim.js
+        can see window.THREE when the module graph resolves.
+    -->
+    <script src="vendor/three.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./vendor/three-shim.js",
+                "three/addons/": "./vendor/three/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- Info Dialog Overlay -->
+    <div id="info-modal">
+        <h2>Bioluminescent Blobs</h2>
+        <p>Click & Drag to Rotate | Scroll to Zoom</p>
+        <p>'Space' or 'P' to Pause</p>
+        <p>'Ctrl+P' to Print | 'Ctrl+I' for Info</p>
+        <p class="perf">100k+ Vertices running pure GLSL</p>
+        <p class="copyright">&copy;2026 Dr. Bill Kolomyjec</p>
+        <button id="btn-close-info" style="width: 100%;">Close</button>
+    </div>
+
+    <!-- Print Dialog Overlay -->
+    <div id="print-modal">
+        <h2>Print Settings</h2>
+        <div class="form-group">
+            <label for="inp-filename">Filename</label>
+            <input type="text" id="inp-filename" value="MicroscopicSwarm.png">
+        </div>
+        <div class="form-group">
+            <label for="inp-width">Width (px)</label>
+            <input type="number" id="inp-width" value="1920">
+        </div>
+        <div class="form-group">
+            <label for="inp-height">Height (px)</label>
+            <input type="number" id="inp-height" value="1080">
+        </div>
+        <div class="button-group">
+            <button id="btn-cancel">Cancel</button>
+            <button id="btn-print">Print / Save</button>
+        </div>
+    </div>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        // OutputPass (r152+) isn't available for r128 - its job (converting the
+        // composer's linear output to sRGB for display) is done the r128 way
+        // below instead: renderer.outputEncoding = THREE.sRGBEncoding.
+
+        // ==========================================
+        // CONFIGURATION
+        // ==========================================
+        const CONFIG = {
+            cubeSize: 800,
+            twistCountMax: 25,  
+            twistAmpRange: 6,   
+            speed: 0.003,       
+            resolution: 128,    
+            bloomStrength: 0.8,   
+            bloomRadius: 0.5,     
+            bloomThreshold: 0.1,  
+            particleCount: 100000
+        };
+
+        // ==========================================
+        // UTILITIES
+        // ==========================================
+        const MathUtils = {
+            rand: (a, b) => a + (b - a) * Math.random(),
+            addHueVariance: (baseHue, degrees) => {
+                const variance = MathUtils.rand(-degrees, degrees) / 360;
+                return (baseHue + variance + 1.0) % 1.0; 
+            },
+            getLetterboxSize: () => {
+                let width = window.innerWidth;
+                let height = width * (9 / 16);
+                if (height > window.innerHeight) {
+                    height = window.innerHeight;
+                    width = height * (16 / 9);
+                }
+                return { width, height };
+            }
+        };
+
+        // ==========================================
+        // TWIST SYSTEM (GLSL & JS)
+        // ==========================================
+        class TwistSystem {
+            constructor() {
+                this.uniforms = {
+                    uTwistCenters: { value: [] },
+                    uTwistAxes: { value: [] },
+                    uTwistAmps: { value: [] },
+                    uTwistRanges: { value: [] },
+                    uTwistAbrupts: { value: [] }
+                };
+                this.jsData = [];
+                this.generate();
+            }
+
+            generate() {
+                for (let i = 0; i < CONFIG.twistCountMax; i++) {
+                    const center = new THREE.Vector3(
+                        MathUtils.rand(-CONFIG.cubeSize/2, CONFIG.cubeSize/2),
+                        MathUtils.rand(-CONFIG.cubeSize/2, CONFIG.cubeSize/2),
+                        MathUtils.rand(-CONFIG.cubeSize/2, CONFIG.cubeSize/2)
+                    );
+                    const axis = new THREE.Vector3(
+                        MathUtils.rand(-1, 1), 
+                        MathUtils.rand(-1, 1), 
+                        MathUtils.rand(-1, 1)
+                    ).normalize();
+                    const amp = MathUtils.rand(-CONFIG.twistAmpRange, CONFIG.twistAmpRange);
+                    const range = MathUtils.rand(CONFIG.cubeSize/3, CONFIG.cubeSize);
+                    const abrupt = MathUtils.rand(2, 4);
+
+                    this.uniforms.uTwistCenters.value.push(center);
+                    this.uniforms.uTwistAxes.value.push(axis);
+                    this.uniforms.uTwistAmps.value.push(amp);
+                    this.uniforms.uTwistRanges.value.push(range);
+                    this.uniforms.uTwistAbrupts.value.push(abrupt);
+
+                    this.jsData.push({ center, axis, amp, range, abruptness: abrupt });
+                }
+            }
+
+            getGLSL() {
+                return `
+                    #define MAX_TWISTS ${CONFIG.twistCountMax}
+                    uniform vec3 uTwistCenters[MAX_TWISTS];
+                    uniform vec3 uTwistAxes[MAX_TWISTS];
+                    uniform float uTwistAmps[MAX_TWISTS];
+                    uniform float uTwistRanges[MAX_TWISTS];
+                    uniform float uTwistAbrupts[MAX_TWISTS];
+                    
+                    vec3 rotateVector(vec3 v, vec3 axis, float angle) {
+                        float cosA = cos(angle);
+                        float sinA = sin(angle);
+                        return v * cosA + cross(axis, v) * sinA + axis * dot(axis, v) * (1.0 - cosA);
+                    }
+                    
+                    vec3 applyTwists(vec3 p) {
+                        vec3 pos = p;
+                        for(int i = 0; i < MAX_TWISTS; i++) {
+                            vec3 diff = pos - uTwistCenters[i];
+                            float dist = length(diff);
+                            float ang = uTwistRanges[i] / (dist + uTwistRanges[i]);
+                            ang = pow(ang, uTwistAbrupts[i]) * uTwistAmps[i];
+                            diff = rotateVector(diff, uTwistAxes[i], ang);
+                            pos = uTwistCenters[i] + diff;
+                        }
+                        return pos;
+                    }
+                `;
+            }
+        }
+
+        const twistSystem = new TwistSystem();
+
+        // ==========================================
+        // ENTITIES
+        // ==========================================
+        class BioluminescentSwarm {
+            constructor(scene, swarmHue) {
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(CONFIG.particleCount * 3);
+                const randoms = new Float32Array(CONFIG.particleCount);
+                
+                for(let i = 0; i < CONFIG.particleCount; i++) {
+                    const r = MathUtils.rand(200, 1500);
+                    const theta = MathUtils.rand(0, Math.PI * 2);
+                    const phi = Math.acos(MathUtils.rand(-1, 1));
+                    
+                    positions[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+                    positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                    positions[i*3+2] = r * Math.cos(phi);
+                    randoms[i]       = Math.random();
+                }
+
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 1));
+
+                this.material = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uColor: { value: new THREE.Color().setHSL(swarmHue, 0.9, 0.6) },
+                        ...twistSystem.uniforms
+                    },
+                    vertexShader: `
+                        uniform float uTime;
+                        attribute float aRandom;
+                        varying float vRandom;
+                        ${twistSystem.getGLSL()}
+                        
+                        void main() {
+                            vRandom = aRandom;
+                            vec3 pos = position;
+                            
+                            float angle = uTime * (0.16 + aRandom * 0.24);
+                            float s = sin(angle); float c = cos(angle);
+                            mat2 rot = mat2(c, -s, s, c);
+                            pos.xz = rot * pos.xz;
+                            pos.xy = rot * pos.xy;
+                            
+                            pos = applyTwists(pos);
+                            
+                            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                            gl_Position = projectionMatrix * mvPosition;
+                            gl_PointSize = (15.0 * aRandom + 5.0) * (500.0 / -mvPosition.z);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 uColor;
+                        uniform float uTime;
+                        varying float vRandom;
+                        
+                        void main() {
+                            vec2 uv = gl_PointCoord - vec2(0.5);
+                            float dist = length(uv);
+                            if(dist > 0.5) discard;
+                            
+                            float pulse = sin(vRandom * 100.0 + uTime * 2.4) * 0.5 + 0.5;
+                            float alpha = (0.5 - dist) * 2.0 * pulse * 0.2; 
+                            
+                            gl_FragColor = vec4(uColor, alpha);
+                        }
+                    `,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+
+                this.points = new THREE.Points(geometry, this.material);
+                this.points.frustumCulled = false;
+                scene.add(this.points);
+            }
+
+            update(time) {
+                this.material.uniforms.uTime.value = time;
+            }
+        }
+
+        class OrganicBlob {
+            constructor(scene, radius, phase, hueOffset, nucleusHue) {
+                this.scene = scene;
+                this.phase = phase;
+                this.baseHue = hueOffset;
+                this.nucleusHue = nucleusHue;
+                
+                this.currentWorldPos = new THREE.Vector3();
+                this.orbitRadMin = 150;
+                this.orbitRadMax = 600; 
+                this.speedMult = MathUtils.rand(0.8, 1.2);
+                this.zOffset = MathUtils.rand(-150, 150);
+
+                // Reusable vectors to prevent GC overhead in update loop
+                this._tempVec = new THREE.Vector3();
+                this._diffVec = new THREE.Vector3();
+                
+                this.initNucleus();
+                this.initMembrane(radius);
+                this.initCilia();
+            }
+
+            initNucleus() {
+                const nucGeo = new THREE.SphereGeometry(8, 16, 16); 
+                const nucMat = new THREE.MeshBasicMaterial({ 
+                    color: new THREE.Color().setHSL(this.nucleusHue, 1.0, 0.2) 
+                }); 
+                this.nucleus = new THREE.Mesh(nucGeo, nucMat);
+                this.nucleus.frustumCulled = false; 
+                this.scene.add(this.nucleus);
+            }
+
+            initMembrane(radius) {
+                this.geometry = new THREE.SphereGeometry(radius, CONFIG.resolution, CONFIG.resolution);
+                const material = new THREE.MeshPhysicalMaterial({
+                    color: new THREE.Color().setHSL(this.baseHue, 0.9, 0.2),
+                    metalness: 0.2, 
+                    roughness: 0.1,
+                    clearcoat: 1.0, 
+                    transparent: true, 
+                    opacity: 0.6,
+                    side: THREE.DoubleSide
+                });
+                
+                material.onBeforeCompile = (shader) => {
+                    shader.uniforms.uCenter = { value: new THREE.Vector3() };
+                    Object.assign(shader.uniforms, twistSystem.uniforms);
+
+                    shader.vertexShader = `
+                        uniform vec3 uCenter;
+                        ${twistSystem.getGLSL()}
+                        ${shader.vertexShader}
+                    `;
+                    
+                    shader.vertexShader = shader.vertexShader.replace(
+                        '#include <begin_vertex>',
+                        `
+                        vec3 baseWorld = position + uCenter;
+                        vec3 twistedWorld = applyTwists(baseWorld);
+                        vec3 transformed = twistedWorld - uCenter;
+                        `
+                    );
+
+                    shader.vertexShader = shader.vertexShader.replace(
+                        '#include <beginnormal_vertex>',
+                        `
+                        vec3 objectNormal = normal;
+                        float eps = 0.5; 
+                        vec3 tangent = normalize(cross(normal, vec3(0.0, 1.0, 0.0)));
+                        if (length(tangent) < 0.1) tangent = normalize(cross(normal, vec3(1.0, 0.0, 0.0)));
+                        vec3 bitangent = cross(normal, tangent);
+                        
+                        vec3 pA = position + tangent * eps + uCenter;
+                        vec3 pB = position + bitangent * eps + uCenter;
+                        vec3 pBase = position + uCenter;
+                        
+                        vec3 twA = applyTwists(pA);
+                        vec3 twB = applyTwists(pB);
+                        vec3 twBase = applyTwists(pBase);
+                        
+                        objectNormal = normalize(cross(twA - twBase, twB - twBase));
+                        `
+                    );
+                    this.membraneShader = shader;
+                };
+                
+                this.mesh = new THREE.Mesh(this.geometry, material);
+                this.mesh.frustumCulled = false;
+                this.scene.add(this.mesh);
+            }
+
+            initCilia() {
+                const basePositions = this.geometry.attributes.position.array;
+                const baseNormals = this.geometry.attributes.normal.array;
+                const vertexCount = this.geometry.attributes.position.count;
+                
+                const ciliaGeo = new THREE.BufferGeometry();
+                const cPos = new Float32Array(vertexCount * 2 * 3);
+                const cBasePos = new Float32Array(vertexCount * 2 * 3);
+                const cNormals = new Float32Array(vertexCount * 2 * 3);
+                const cLengths = new Float32Array(vertexCount * 2);
+                const cIsTip = new Float32Array(vertexCount * 2);
+                
+                for(let i = 0; i < vertexCount; i++) {
+                    const ix = i * 3, cBase = i * 6, iTipBase = i * 2;
+                    const vx = basePositions[ix], vy = basePositions[ix+1], vz = basePositions[ix+2];
+                    const nx = baseNormals[ix], ny = baseNormals[ix+1], nz = baseNormals[ix+2];
+                    const len = MathUtils.rand(6, 28);
+                    
+                    cBasePos[cBase] = vx; cBasePos[cBase+1] = vy; cBasePos[cBase+2] = vz;
+                    cNormals[cBase] = nx; cNormals[cBase+1] = ny; cNormals[cBase+2] = nz;
+                    cLengths[iTipBase] = len; cIsTip[iTipBase] = 0.0;
+                    
+                    cBasePos[cBase+3] = vx; cBasePos[cBase+4] = vy; cBasePos[cBase+5] = vz;
+                    cNormals[cBase+3] = nx; cNormals[cBase+4] = ny; cNormals[cBase+5] = nz;
+                    cLengths[iTipBase+1] = len; cIsTip[iTipBase+1] = 1.0;
+                }
+
+                ciliaGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3)); 
+                ciliaGeo.setAttribute('aBasePos', new THREE.BufferAttribute(cBasePos, 3));
+                ciliaGeo.setAttribute('aNormal', new THREE.BufferAttribute(cNormals, 3));
+                ciliaGeo.setAttribute('aHairLength', new THREE.BufferAttribute(cLengths, 1));
+                ciliaGeo.setAttribute('aIsTip', new THREE.BufferAttribute(cIsTip, 1));
+
+                this.ciliaMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uCenter: { value: new THREE.Vector3() },
+                        uSwayVector: { value: new THREE.Vector3() },
+                        uColor: { value: new THREE.Color().setHSL(this.baseHue, 0.8, 0.2) },
+                        ...twistSystem.uniforms
+                    },
+                    vertexShader: `
+                        uniform float uTime;
+                        uniform vec3 uCenter;
+                        uniform vec3 uSwayVector;
+                        
+                        attribute vec3 aBasePos;
+                        attribute vec3 aNormal;
+                        attribute float aHairLength;
+                        attribute float aIsTip;
+                        
+                        ${twistSystem.getGLSL()}
+                        
+                        void main() {
+                            vec3 rootWorld = aBasePos + uCenter;
+                            vec3 finalPos;
+                            
+                            if (aIsTip > 0.5) {
+                                vec3 tipWorld = rootWorld + aNormal * aHairLength;
+                                float localSwayX = uSwayVector.x + sin(aBasePos.y * 0.05 + uTime * 4.0) * 3.0;
+                                float localSwayY = uSwayVector.y + cos(aBasePos.x * 0.05 + uTime * 4.0) * 3.0;
+                                tipWorld.x += localSwayX;
+                                tipWorld.y += localSwayY;
+                                tipWorld.z += uSwayVector.z;
+                                finalPos = applyTwists(tipWorld);
+                            } else {
+                                finalPos = applyTwists(rootWorld);
+                            }
+                            gl_Position = projectionMatrix * viewMatrix * vec4(finalPos, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 uColor;
+                        void main() { gl_FragColor = vec4(uColor, 0.4); } 
+                    `,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+
+                this.cilia = new THREE.LineSegments(ciliaGeo, this.ciliaMat);
+                this.cilia.frustumCulled = false;
+                this.scene.add(this.cilia);
+            }
+
+            updatePosition(time) {
+                const localTime = time * this.speedMult;
+                
+                const phiPct = (Math.sin(localTime * 0.5) + 1) / 2; 
+                const phiFactor = Math.sin(Math.PI/2 * phiPct); 
+                const orbitAngle = localTime * 0.2;
+                const currentOrbitRadius = this.orbitRadMin + phiFactor * (this.orbitRadMax - this.orbitRadMin);
+                
+                const centerX = currentOrbitRadius * Math.cos(orbitAngle + this.phase);
+                const centerY = currentOrbitRadius * Math.sin(orbitAngle + this.phase);
+                const centerZ = Math.sin(orbitAngle * 1.5 + this.phase) * 300 + this.zOffset; 
+                
+                this.currentWorldPos.set(centerX, centerY, centerZ);
+
+                const swayStrength = 25.0; 
+                const dragX = Math.sin(orbitAngle + this.phase) * swayStrength;
+                const dragY = -Math.cos(orbitAngle + this.phase) * swayStrength;
+                const swayZ = Math.sin(localTime * 3 + this.phase) * 5; 
+
+                // Update uniforms
+                if (this.membraneShader) {
+                    this.membraneShader.uniforms.uCenter.value.set(centerX, centerY, centerZ);
+                }
+                this.ciliaMat.uniforms.uCenter.value.set(centerX, centerY, centerZ);
+                this.ciliaMat.uniforms.uSwayVector.value.set(dragX, dragY, swayZ);
+                this.ciliaMat.uniforms.uTime.value = localTime; 
+
+                // Update base meshes
+                this.mesh.position.set(centerX, centerY, centerZ);
+                this.cilia.position.set(centerX, centerY, centerZ);
+
+                // Calculate twisted nucleus position using pre-allocated vectors to save GC
+                this._tempVec.set(centerX, centerY, centerZ);
+                for (let tw of twistSystem.jsData) {
+                    this._diffVec.subVectors(this._tempVec, tw.center);
+                    let dist = this._diffVec.length();
+                    let ang = tw.range / (dist + tw.range);
+                    ang = Math.pow(ang, tw.abruptness) * tw.amp;
+                    this._diffVec.applyAxisAngle(tw.axis, ang);
+                    this._tempVec.addVectors(this._diffVec, tw.center);
+                }
+                this.nucleus.position.copy(this._tempVec);
+            }
+            
+            updateGlow(allBlobs) {
+                let minDist = Infinity;
+                for (let other of allBlobs) {
+                    if (other === this) continue;
+                    let d = this.currentWorldPos.distanceTo(other.currentWorldPos);
+                    if (d < minDist) minDist = d;
+                }
+                
+                let proximity = Math.max(0.0, 1.0 - (minDist / 600.0));
+                proximity = Math.pow(proximity, 1.5);
+                
+                const nucLightness = 0.15 + (proximity * 0.70); 
+                const memLightness = 0.10 + (proximity * 0.45); 
+                const cilLightness = 0.20 + (proximity * 0.60); 
+                
+                this.nucleus.material.color.setHSL(this.nucleusHue, 1.0, nucLightness);
+                this.mesh.material.color.setHSL(this.baseHue, 0.9, memLightness);
+                this.ciliaMat.uniforms.uColor.value.setHSL(this.baseHue, 0.8, cilLightness);
+            }
+        }
+
+        // ==========================================
+        // CORE APPLICATION
+        // ==========================================
+        let scene, camera, renderer, controls, composer;
+        let blobs = [];
+        let swarm;
+        let time = 0;
+        let isPaused = false; 
+
+        function init() {
+            scene = new THREE.Scene();
+            
+            const { width, height } = MathUtils.getLetterboxSize();
+
+            camera = new THREE.PerspectiveCamera(60, 16 / 9, 1, 3000);
+            camera.position.set(0, 300, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            document.body.appendChild(renderer.domElement);
+
+            // Post-processing setup
+            const renderScene = new RenderPass(scene, camera);
+            const bloomPass = new UnrealBloomPass(
+                new THREE.Vector2(width, height), 
+                CONFIG.bloomStrength, 
+                CONFIG.bloomRadius, 
+                CONFIG.bloomThreshold
+            );
+            
+            composer = new EffectComposer(renderer);
+            composer.addPass(renderScene);
+            composer.addPass(bloomPass);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.5;
+
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.4)); 
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2); 
+            dirLight.position.set(1, 1, 1);
+            scene.add(dirLight);
+
+            // Establish color palette
+            const baseHue1 = Math.random(); 
+            const baseHue2 = (baseHue1 + 1/3) % 1.0; 
+            const baseHue3 = (baseHue1 + 2/3) % 1.0; 
+            
+            scene.background = new THREE.Color().setHSL(baseHue3, 0.4, 0.02);
+            scene.fog = new THREE.FogExp2(scene.background, 0.0006);
+
+            // Instantiate entities
+            swarm = new BioluminescentSwarm(scene, baseHue3);
+            
+            const phases = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+            const radii = [100, 130, 150, 115];
+            const blobHues = [
+                MathUtils.addHueVariance(baseHue1, 15), 
+                MathUtils.addHueVariance(baseHue1, 15), 
+                MathUtils.addHueVariance(baseHue2, 15), 
+                MathUtils.addHueVariance(baseHue2, 15)  
+            ];
+
+            for(let i = 0; i < 4; i++) {
+                blobs.push(new OrganicBlob(scene, radii[i], phases[i], blobHues[i], baseHue3));
+            }
+
+            setupControls();
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (!isPaused) {
+                time += CONFIG.speed;
+                blobs.forEach(blob => blob.updatePosition(time));
+                blobs.forEach(blob => blob.updateGlow(blobs));
+                swarm.update(time);
+                controls.autoRotate = true; 
+            } else {
+                controls.autoRotate = false; 
+            }
+            
+            controls.update();
+            composer.render();
+        }
+
+        function onWindowResize() {
+            const { width, height } = MathUtils.getLetterboxSize();
+            camera.aspect = 16 / 9;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+            composer.setSize(width, height);
+        }
+
+        // ==========================================
+        // UI & EXPORT
+        // ==========================================
+        function saveHighResImage(targetWidth, targetHeight, filename) {
+            // Save current state
+            const originalSize = new THREE.Vector2();
+            renderer.getSize(originalSize);
+
+            // Set specific target size for print
+            renderer.setSize(targetWidth, targetHeight);
+            composer.setSize(targetWidth, targetHeight);
+            camera.aspect = targetWidth / targetHeight;
+            camera.updateProjectionMatrix();
+
+            // Render and Export
+            composer.render();
+            try {
+                const dataURL = renderer.domElement.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.href = dataURL;
+                link.download = filename;
+                link.click();
+            } catch (err) {
+                console.error("Error saving image:", err);
+            }
+
+            // Restore previous state
+            renderer.setSize(originalSize.x, originalSize.y);
+            composer.setSize(originalSize.x, originalSize.y);
+            camera.aspect = 16 / 9; 
+            camera.updateProjectionMatrix();
+            composer.render();
+        }
+
+        function setupControls() {
+            const printModal = document.getElementById('print-modal');
+            const infoModal = document.getElementById('info-modal');
+            const btnCancel = document.getElementById('btn-cancel');
+            const btnPrint = document.getElementById('btn-print');
+            const btnCloseInfo = document.getElementById('btn-close-info');
+            const inpWidth = document.getElementById('inp-width');
+            const inpHeight = document.getElementById('inp-height');
+            const inpFilename = document.getElementById('inp-filename');
+
+            window.addEventListener('keydown', (e) => {
+                // 1. Play/Pause
+                if ((e.code === 'Space' || e.key.toLowerCase() === 'p') && !e.ctrlKey && !e.metaKey) {
+                    if (printModal.style.display !== 'block' && infoModal.style.display !== 'block') {
+                        e.preventDefault();
+                        isPaused = !isPaused;
+                    }
+                }
+                // 2. Print Dialog
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+                    e.preventDefault(); 
+                    printModal.style.display = 'block';
+                    infoModal.style.display = 'none';
+                    isPaused = true; 
+                }
+                // 3. Info Dialog
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+                    e.preventDefault(); 
+                    infoModal.style.display = 'block';
+                    printModal.style.display = 'none';
+                    isPaused = true; 
+                }
+            });
+
+            btnCancel.addEventListener('click', () => {
+                printModal.style.display = 'none';
+                isPaused = false; 
+            });
+
+            btnCloseInfo.addEventListener('click', () => {
+                infoModal.style.display = 'none';
+                isPaused = false; 
+            });
+
+            btnPrint.addEventListener('click', () => {
+                const w = parseInt(inpWidth.value) || 1920;
+                const h = parseInt(inpHeight.value) || 1080;
+                const filename = inpFilename.value || 'MicroscopicSwarm.png';
+                
+                saveHighResImage(w, h, filename);
+                printModal.style.display = 'none';
+                isPaused = false; 
+            });
+        }
+
+        // Initialize application
+        init();
+    </script>
+</body>
+</html>
